@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MovieFlix - Demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.1/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #ef4444;
+            border-radius: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #18181b;
+            border-radius: 8px;
+        }
+
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #ef4444 #18181b;
+        }
+    </style>
+</head>
+
+<body class="bg-zinc-900 text-zinc-200 min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="sticky top-0 bg-zinc-900 w-full h-16 flex items-center justify-between px-6 z-30 shadow-lg">
+        <div class="flex items-center space-x-6">
+            <span class="font-bold text-2xl text-red-500">MovieFlix</span>
+            <a href="#movies" class="hover:text-red-500 transition-colors">Movies</a>
+            <a href="#shows" class="hover:text-red-500 transition-colors">Shows</a>
+        </div>
+        <div class="relative w-64 max-w-xs">
+            <div class="flex items-center bg-zinc-800 rounded-full px-3 py-1 shadow-inner">
+                <svg class="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" stroke-width="2"
+                    viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                </svg>
+                <input id="searchInput"
+                    class="bg-transparent w-full border-none outline-none text-zinc-200 placeholder-zinc-400 py-1"
+                    type="search" placeholder="Search for movies or shows..." />
+            </div>
+            <div id="searchResults"
+                class="hidden absolute left-0 mt-2 w-full max-h-80 bg-zinc-800 rounded-xl shadow-xl z-40 overflow-y-auto border border-zinc-700">
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 pb-24 px-2 md:px-8">
+        <section class="max-w-7xl mx-auto" id="movies-section">
+            <h2 class="font-bold text-zinc-100 text-3xl mt-8 mb-4 border-l-4 border-red-500 pl-3" id="movies">Movies
+            </h2>
+            <div id="moviesGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6"></div>
+        </section>
+        <section class="max-w-7xl mx-auto mt-12" id="shows-section">
+            <h2 class="font-bold text-zinc-100 text-3xl mb-4 border-l-4 border-red-500 pl-3" id="shows">Shows</h2>
+            <div id="showsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6"></div>
+        </section>
+        <!-- Video Modal -->
+        <div id="videoModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden">
+            <div class="bg-zinc-900 rounded-xl shadow-2xl p-4 max-w-3xl w-full relative">
+                <button onclick="closeModal()"
+                    class="absolute top-2 right-2 text-zinc-400 hover:text-red-500 text-2xl">&times;</button>
+                <h3 id="modalTitle" class="text-zinc-100 text-xl font-bold mb-2"></h3>
+                <div id="serverButtons" class="flex gap-2 mb-2"></div>
+                <iframe id="videoFrame" class="w-full aspect-video rounded-xl" frameborder="0" allowfullscreen></iframe>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full bg-zinc-900 text-zinc-400 py-6 px-4 text-center shadow-inner fixed bottom-0 left-0 z-20">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-center gap-2">
+            <span class="text-sm">&copy; <span id="year"></span> MovieFlix. All rights reserved.</span>
+        </div>
+    </footer>
+
+    <script>
+        // Replace with your TMDB Bearer Token
+        const API_KEY = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI3N2RlNjEzZDBlMWQyOGUxNWM3NDk0Y2IwMzMxYmZkNCIsIm5iZiI6MTc1MTE2MDkxNy40MTQsInN1YiI6IjY4NjA5ODU1NWJiNDIxMzVlYjIyOTNjZiIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.0SZDn0EMcO0Eoc99dJolcib7eNYFNRiX-jVWsAiUQVM';
+
+        // Embed server configs
+        const MOVIE_EMBED_SERVERS = [
+            {
+                name: "AutoEmbed",
+                getSrc: (id) => `https://autoembed.co/movie/tmdb/${id}`,
+            },
+            {
+                name: "Vidsrc",
+                getSrc: (id) => `https://vidsrc.to/embed/movie/${id}`,
+            },
+            {
+                name: "MultiEmbed",
+                getSrc: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
+            },
+        ];
+        const TV_EMBED_SERVERS = [
+            {
+                name: "AutoEmbed",
+                getSrc: (id, ses, ep) => `https://autoembed.co/tv/tmdb/${id}-${ses}-${ep}`,
+            },
+            {
+                name: "Vidsrc",
+                getSrc: (id, ses, ep) => `https://vidsrc.to/embed/tv/${id}/${ses}/${ep}`,
+            },
+            {
+                name: "MultiEmbed",
+                getSrc: (id, ses, ep) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${ses}&e=${ep}`,
+            },
+        ];
+        let currentServerIdx = 0;
+        let currentType = "movie";
+        let currentId = null;
+        let currentSes = 1;
+        let currentEp = 1;
+
+        // Set year in footer
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        // Fetch Movies
+        fetch('https://api.themoviedb.org/3/movie/now_playing?language=hi-IN&region=IN&page=1', {
+            headers: { accept: 'application/json', Authorization: `Bearer ${API_KEY}` }
+        })
+            .then(res => res.json())
+            .then(data => {
+                const grid = document.getElementById('moviesGrid');
+                data.results.forEach(movie => {
+                    const div = document.createElement('div');
+                    div.className = 'group bg-zinc-800 rounded-2xl shadow-lg overflow-hidden aspect-[2/3] relative cursor-pointer transition-transform hover:scale-105';
+                    div.innerHTML = `
+          <img class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" src="https://image.tmdb.org/t/p/w500/${movie.poster_path}" alt="${movie.title}" />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+            <p class="text-lg font-semibold text-zinc-100 truncate">${movie.title}</p>
+            <p class="text-xs text-zinc-300 mt-1 line-clamp-2">${movie.overview || ''}</p>
+          </div>
+        `;
+                    div.onclick = () => openModal("movie", movie.id, 1, 1, movie.title);
+                    grid.appendChild(div);
+                });
+            });
+
+        // Fetch TV Shows
+        const today = new Date().toISOString().split('T')[0];
+        fetch(`https://api.themoviedb.org/3/discover/tv?language=hi-IN&region=IN&sort_by=release_date.desc&original_language=hi&release_date.lte=${today}`, {
+            headers: { accept: 'application/json', Authorization: `Bearer ${API_KEY}` }
+        })
+            .then(res => res.json())
+            .then(data => {
+                const grid = document.getElementById('showsGrid');
+                data.results.forEach(show => {
+                    const div = document.createElement('div');
+                    div.className = 'group bg-zinc-800 rounded-2xl shadow-lg overflow-hidden aspect-[2/3] relative cursor-pointer transition-transform hover:scale-105';
+                    div.innerHTML = `
+          <img class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" src="https://image.tmdb.org/t/p/w500/${show.poster_path}" alt="${show.name}" />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+            <p class="text-lg font-semibold text-zinc-100 truncate">${show.name}</p>
+            <p class="text-xs text-zinc-300 mt-1 line-clamp-2">${show.overview || ''}</p>
+          </div>
+        `;
+                    div.onclick = () => openModal("tv", show.id, 1, 1, show.name);
+                    grid.appendChild(div);
+                });
+            });
+
+        // Search Functionality
+        document.getElementById('searchInput').addEventListener('input', function (e) {
+            const val = e.target.value.trim();
+            const resultsDiv = document.getElementById('searchResults');
+            if (!val) {
+                resultsDiv.classList.add('hidden');
+                resultsDiv.innerHTML = '';
+                return;
+            }
+            fetch(`https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(val)}&language=hi-IN&region=IN&page=1`, {
+                headers: { accept: 'application/json', Authorization: `Bearer ${API_KEY}` }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    resultsDiv.innerHTML = '';
+                    if (data.results && data.results.length > 0) {
+                        data.results.forEach(item => {
+                            if (!item.poster_path && !item.backdrop_path) return;
+                            const div = document.createElement('div');
+                            div.className = 'flex items-center p-2 hover:bg-zinc-700 cursor-pointer transition-all';
+                            div.innerHTML = `
+              <div class="w-12 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-zinc-900">
+                <img class="w-full h-full object-cover" src="https://image.tmdb.org/t/p/w500${item.poster_path || item.backdrop_path}" alt="${item.title || item.name}" />
+              </div>
+              <div class="ml-3 flex flex-col w-44">
+                <h3 class="truncate font-semibold text-zinc-100 text-base">${item.title || item.name}</h3>
+                <p class="truncate text-xs text-zinc-400">${item.overview || ''}</p>
+              </div>
+            `;
+                            div.onclick = () => {
+                                resultsDiv.classList.add('hidden');
+                                if (item.media_type === 'movie') {
+                                    openModal("movie", item.id, 1, 1, item.title || item.name);
+                                } else {
+                                    openModal("tv", item.id, 1, 1, item.title || item.name);
+                                }
+                            };
+                            resultsDiv.appendChild(div);
+                        });
+                        resultsDiv.classList.remove('hidden');
+                    } else {
+                        resultsDiv.innerHTML = '<div class="p-4 text-center text-zinc-400 text-sm">No results found.</div>';
+                        resultsDiv.classList.remove('hidden');
+                    }
+                });
+        });
+
+        // Modal Functions
+        function openModal(type, id, ses, ep, title) {
+            currentType = type;
+            currentId = id;
+            currentSes = ses;
+            currentEp = ep;
+            currentServerIdx = 0;
+            document.getElementById('modalTitle').textContent = title;
+            updateIframe();
+            updateServerButtons();
+            document.getElementById('videoModal').classList.remove('hidden');
+        }
+        function closeModal() {
+            document.getElementById('videoFrame').src = '';
+            document.getElementById('modalTitle').textContent = '';
+            document.getElementById('videoModal').classList.add('hidden');
+        }
+        function updateIframe() {
+            let src = '';
+            if (currentType === 'movie') {
+                src = MOVIE_EMBED_SERVERS[currentServerIdx].getSrc(currentId);
+            } else {
+                src = TV_EMBED_SERVERS[currentServerIdx].getSrc(currentId, currentSes, currentEp);
+            }
+            document.getElementById('videoFrame').src = src;
+        }
+        function updateServerButtons() {
+            const btns = document.getElementById('serverButtons');
+            btns.innerHTML = '';
+            const servers = currentType === 'movie' ? MOVIE_EMBED_SERVERS : TV_EMBED_SERVERS;
+            servers.forEach((srv, idx) => {
+                const btn = document.createElement('button');
+                btn.textContent = srv.name;
+                btn.className = `px-3 py-1 rounded ${currentServerIdx === idx ? "bg-red-600 text-white" : "bg-zinc-700 text-zinc-200"} transition`;
+                btn.onclick = () => {
+                    currentServerIdx = idx;
+                    updateIframe();
+                    updateServerButtons();
+                };
+                btns.appendChild(btn);
+            });
+        }
+        // Close modal on background click
+        document.getElementById('videoModal').addEventListener('click', function (e) {
+            if (e.target === this) closeModal();
+        });
+        // Close search results on outside click
+        document.addEventListener('click', function (e) {
+            if (!document.getElementById('searchInput').contains(e.target)) {
+                document.getElementById('searchResults').classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+
+</html>
